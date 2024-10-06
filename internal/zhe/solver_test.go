@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 	"text/tabwriter"
+	"time"
 )
 
 var resistors = []float32{
@@ -36,6 +37,9 @@ func TestSolver(t *testing.T) {
 	s.AddVariable("R2", resistors)
 	s.AddVariable("C1", capacitors)
 
+	s.AddVariable("R3", resistors)
+	s.AddVariable("R4", resistors[:10])
+
 	err = s.AddConstraint("Divider", "3.3*{1}/({0}+{1})", 1, 0.99, 1.01)
 	if err != nil {
 		log.Fatal(err)
@@ -45,9 +49,21 @@ func TestSolver(t *testing.T) {
 		log.Fatal(err)
 	}
 
+	start := time.Now()
 	s.Solve(10)
+	elapsed := time.Since(start)
 
 	s.printSolutions()
+
+	var total uint64 = 1
+	for _, v := range s.variables {
+		total *= uint64(len(v.values))
+	}
+	fmt.Printf("Elapsed time        : %s\n", elapsed)
+	fmt.Printf("Total possibilities : %d\n", total)
+	fmt.Printf("Processing speed    : %.2e possibilities/s\n", float64(total)/elapsed.Seconds())
+	fmt.Printf("Solutions found     : %d solutions\n", s.nbSolution)
+	fmt.Printf("Solutions ratio     : %.2e\n", float64(s.nbSolution)/float64(total))
 }
 
 func (s *Solver) printSolutions() {
@@ -60,7 +76,7 @@ func (s *Solver) printSolutions() {
 	// Write rows
 	i := 1
 	for _, solution := range slices.Backward(s.solutions) {
-		fmt.Fprintf(w, "%d\t%e\t%e\t%e\t%e\n", i, solution.values[0], solution.values[1], solution.values[2], solution.score)
+		fmt.Fprintf(w, "%d\t%g\t%g\t%g\t%g\n", i, solution.values[0], solution.values[1], solution.values[2], solution.score)
 		i++
 	}
 

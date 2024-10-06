@@ -31,6 +31,7 @@ type Solver struct {
 	variables   []variable
 	constraints []constraint
 	solutions   []solution
+	nbSolution  uint64
 }
 
 func NewSolver() *Solver {
@@ -43,6 +44,7 @@ func (s *Solver) Solve(maxSolution int) {
 	}
 
 	s.solutions = nil
+	s.nbSolution = 0
 
 	// Create a channel to receive the solutions
 	channel := make(chan solution)
@@ -52,12 +54,16 @@ func (s *Solver) Solve(maxSolution int) {
 	var wg sync.WaitGroup
 	for _, value := range s.variables[0].values {
 		wg.Add(1)
-		go s.solveRoutine(&wg, channel, value)
+		go func() {
+			s.solveRoutine(channel, value)
+			wg.Done()
+		}()
 	}
 
 	// Start a goroutine to close the progress channel when all tasks are done
 	go func() {
 		for solution := range channel {
+			s.nbSolution++
 			s.insertSolution(solution, maxSolution)
 		}
 	}()
@@ -65,9 +71,7 @@ func (s *Solver) Solve(maxSolution int) {
 	wg.Wait()
 }
 
-func (s *Solver) solveRoutine(wg *sync.WaitGroup, channel chan<- solution, values ...float32) {
-	defer wg.Done()
-
+func (s *Solver) solveRoutine(channel chan<- solution, values ...float32) {
 	inputs := make([]float32, len(s.variables))
 	outputs := make([]float32, len(s.constraints))
 	copy(inputs, values)
@@ -76,11 +80,10 @@ func (s *Solver) solveRoutine(wg *sync.WaitGroup, channel chan<- solution, value
 }
 
 func (s *Solver) solve(inputs []float32, outputs []float32, depth int, channel chan<- solution) {
-	if depth == len(inputs)-1 {
-		for _, value := range s.variables[depth].values {
-			inputs[depth] = value
-			ok, score := s.evaluate(inputs, outputs)
-			if ok {
+	for _, inputs[depth] = range s.variables[depth].values {
+		if depth == len(inputs)-1 {
+			valid, score := s.evaluate(inputs, outputs)
+			if valid {
 				values := make([]float32, len(inputs))
 				copy(values, inputs)
 				channel <- solution{
@@ -88,10 +91,7 @@ func (s *Solver) solve(inputs []float32, outputs []float32, depth int, channel c
 					score:  score,
 				}
 			}
-		}
-	} else {
-		for _, value := range s.variables[depth].values {
-			inputs[depth] = value
+		} else {
 			s.solve(inputs, outputs, depth+1, channel)
 		}
 	}
